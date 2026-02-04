@@ -203,7 +203,7 @@ trait JettonWallet {
         }
     }
 
-    get fun getWalletData(): WalletData {
+    get fun walletData(): WalletData {
         return
         WalletData{
             balance: self.balance,

@@ -1,4 +1,4 @@
-import "./JettonWallet.tact";
+import "./jetton_wallet.tact";
 
 message JettonMint {
     origin: Address;
@@ -86,7 +86,7 @@ trait JettonMaster {
 
 // ====== Get Methods ====== //
 
-    get fun getJettonData(): JettonData {
+    get fun jettonData(): JettonData {
         return
         JettonData{
             totalSupply: self.totalSupply,
@@ -97,7 +97,7 @@ trait JettonMaster {
         };
     }
 
-    get fun getWalletAddress(ownerAddress: Address): Address {
+    get fun walletAddress(ownerAddress: Address): Address {
         let initCode: StateInit = self.calculateJettonWalletInit(ownerAddress);
         return contractAddress(initCode);
     }
