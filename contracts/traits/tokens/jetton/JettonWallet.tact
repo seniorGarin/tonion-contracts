@@ -1,207 +1,215 @@
 message(0x0f8a7ea5) JettonTransfer {
-    query_id: Int as uint64; // arbitrary request number
+    queryId: Int as uint64; // arbitrary request number
     amount: Int as coins; // amount of jettons to transfer
     destination: Address; // address of the new owner of the jettons
-    response_destination: Address; // address where to send a response with confirmation of a successful transfer and the rest of the incoming message Toncoins.
-    custom_payload: Cell?; // optional custom payload
-    forward_ton_amount: Int as coins; // the amount of nanotons to be sent to the destination address.
-    forward_payload: Slice as remaining; // optional custom data that should be sent to the destination address.
+    responseDestination: Address; // address where to send a response with confirmation of a successful transfer and the rest of the incoming message Toncoins.
+    customPayload: Cell?; // optional custom payload
+    forwardTonAmount: Int as coins; // the amount of nanotons to be sent to the destination address.
+    forwardPayload: Slice as remaining; // optional custom data that should be sent to the destination address.
 }
+
 message(0x7362d09c) JettonTransferNotification {
-    query_id: Int as uint64; // arbitrary request number
+    queryId: Int as uint64; // arbitrary request number
     amount: Int as coins; // amount of jettons to transfer
     sender: Address; // address of the sender of the jettons
-    forward_payload: Slice as remaining; // optional custom payload
+    forwardPayload: Slice as remaining; // optional custom payload
 }
+
 message(0x595f07bc) JettonBurn {
-    query_id: Int as uint64; // arbitrary request number
+    queryId: Int as uint64; // arbitrary request number
     amount: Int as coins; // amount of jettons to burn
-    response_destination: Address; // address where to send a response with confirmation of a successful burn and the rest of the incoming message coins.
-    custom_payload: Cell?; // optional custom payload
+    responseDestination: Address; // address where to send a response with confirmation of a successful burn and the rest of the incoming message coins.
+    customPayload: Cell?; // optional custom payload
 }
+
 message(0xd53276db) JettonExcesses {
-    query_id: Int as uint64; // arbitrary request number
+    queryId: Int as uint64; // arbitrary request number
 }
+
 message(0x178d4519) JettonInternalTransfer {
-    query_id: Int as uint64; // arbitrary request number
+    queryId: Int as uint64; // arbitrary request number
     amount: Int as coins; // amount of jettons to transfer
     from: Address; // address of the sender of the jettons
-    response_address: Address?; // address where to send a response with confirmation of a successful transfer and the rest of the incoming message coins.
-    forward_ton_amount: Int as coins; // the amount of nanotons to be sent to the destination address.
-    forward_payload: Slice as remaining; // optional custom data that should be sent to the destination address.
+    responseAddress: Address?; // address where to send a response with confirmation of a successful transfer and the rest of the incoming message coins.
+    forwardTonAmount: Int as coins; // the amount of nanotons to be sent to the destination address.
+    forwardPayload: Slice as remaining; // optional custom data that should be sent to the destination address.
 }
+
 message(0x7bdd97de) JettonBurnNotification {
-    query_id: Int as uint64; // arbitrary request number
+    queryId: Int as uint64; // arbitrary request number
     amount: Int as coins; // amount of jettons to burn
     sender: Address; // address of the sender of the jettons
-    response_destination: Address; // address where to send a response with confirmation of a successful burn and the rest of the incoming message coins.
+    responseDestination: Address; // address where to send a response with confirmation of a successful burn and the rest of the incoming message coins.
 }
+
 struct WalletData {
     balance: Int as coins; // amount of jettons on wallet
     owner: Address; // address of wallet owner;
     jetton: Address; // address of Jetton master-address
-    jetton_wallet_code: Cell; // with code of this wallet
+    jettonWalletCode: Cell; // with code of this wallet
 }
+
 // ============================================================ //
+
 trait JettonWallet {
     balance: Int;
     owner: Address;
-    jetton_master: Address;
+    jettonMaster: Address;
     virtual const gasConsumption: Int = ton("0.01");
     virtual const minTonsForStorage: Int = ton("0.01");
 
-    receive(msg: JettonTransfer){
+    receive(msg: JettonTransfer) {
         let ctx: Context = context();
         self.balance = (self.balance - msg.amount);
         require(self.balance >= 0, "JettonWallet: Not enough jettons to transfer");
-        self._transfer_validate(ctx, msg);
-        self._transfer_estimate_remain_value(ctx, msg);
-        self._transfer_jetton(ctx, msg);
+        self.transferValidate(ctx, msg);
+        self.transferEstimateRemainValue(ctx, msg);
+        self.transferJetton(ctx, msg);
     }
 
-    receive(msg: JettonBurn){
+    receive(msg: JettonBurn) {
         let ctx: Context = context();
         self.balance = (self.balance - msg.amount);
         require(self.balance >= 0, "JettonWallet: Not enough balance to burn tokens");
-        self._burn_validate(ctx, msg);
-        self._burn_tokens(ctx, msg);
+        self.burnValidate(ctx, msg);
+        self.burnTokens(ctx, msg);
     }
 
-    receive(msg: JettonInternalTransfer){
+    receive(msg: JettonInternalTransfer) {
         let ctx: Context = context();
         self.balance = (self.balance + msg.amount);
         require(self.balance >= 0, "JettonWallet: Not allow negative balance after internal transfer");
-        self._internal_transfer_validate(ctx, msg);
-        let remain: Int = self._internal_transfer_estimate_remain_value(ctx, msg);
-        if (msg.forward_ton_amount > 0) {
-            self._internal_transfer_notification(ctx, msg);
+        self.internalTransferValidate(ctx, msg);
+        let remain: Int = self.internalTransferEstimateRemainValue(ctx, msg);
+        if (msg.forwardTonAmount > 0) {
+            self.internalTransferNotification(ctx, msg);
         }
-        self._internal_transfer_excesses(ctx, msg, remain);
+        self.internalTransferExcesses(ctx, msg, remain);
     }
 
-    bounced(src: bounced<JettonInternalTransfer>){
+    bounced(src: bounced<JettonInternalTransfer>) {
         self.balance = (self.balance + src.amount);
     }
 
-    bounced(src: bounced<JettonBurnNotification>){
+    bounced(src: bounced<JettonBurnNotification>) {
         self.balance = (self.balance + src.amount);
     }
 
-    abstract inline fun calculate_jetton_wallet_init(owner_address: Address): StateInit;
+    abstract inline fun calculateJettonWalletInit(ownerAddress: Address): StateInit;
 
-    virtual inline fun _transfer_validate(ctx: Context, msg: JettonTransfer) {
+    virtual inline fun transferValidate(ctx: Context, msg: JettonTransfer) {
         require(ctx.sender == self.owner, "JettonWallet: Only owner can call this function");
     }
 
-    virtual inline fun _burn_validate(ctx: Context, msg: JettonBurn) {
+    virtual inline fun burnValidate(ctx: Context, msg: JettonBurn) {
         require(ctx.sender == self.owner, "JettonWallet: Only owner can burn tokens");
     }
 
-    virtual inline fun _transfer_estimate_remain_value(ctx: Context, msg: JettonTransfer) {
-        let fwd_count: Int = 1;
-        if (msg.forward_ton_amount > 0) {
-            fwd_count = 2;
+    virtual inline fun transferEstimateRemainValue(ctx: Context, msg: JettonTransfer) {
+        let fwdCount: Int = 1;
+        if (msg.forwardTonAmount > 0) {
+            fwdCount = 2;
         }
-        require(ctx.value > ((fwd_count * ctx.readForwardFee() + 2 * self.gasConsumption) + self.minTonsForStorage),
-            "Not enough funds to transfer"
+        require(ctx.value > ((fwdCount * ctx.readForwardFee() + 2 * self.gasConsumption) + self.minTonsForStorage),
+        "Not enough funds to transfer"
         );
     }
 
-    virtual inline fun _transfer_jetton(ctx: Context, msg: JettonTransfer) {
-        let init: StateInit = self.calculate_jetton_wallet_init(msg.destination);
+    virtual inline fun transferJetton(ctx: Context, msg: JettonTransfer) {
+        let init: StateInit = self.calculateJettonWalletInit(msg.destination);
         let receiver: Address = contractAddress(init);
         send(SendParameters{
-                to: receiver,
-                value: 0,
-                bounce: true,
-                mode: SendRemainingValue,
-                body: JettonInternalTransfer{
-                    query_id: msg.query_id,
-                    amount: msg.amount,
-                    response_address: msg.response_destination,
-                    from: self.owner,
-                    forward_ton_amount: msg.forward_ton_amount,
-                    forward_payload: msg.forward_payload
-                }.toCell(),
-                code: init.code,
-                data: init.data
-            }
+            to: receiver,
+            value: 0,
+            bounce: true,
+            mode: SendRemainingValue,
+            body: JettonInternalTransfer{
+                queryId: msg.queryId,
+                amount: msg.amount,
+                responseAddress: msg.responseDestination,
+                from: self.owner,
+                forwardTonAmount: msg.forwardTonAmount,
+                forwardPayload: msg.forwardPayload
+            }.toCell(),
+            code: init.code,
+            data: init.data
+        }
         );
     }
 
-    virtual inline fun _burn_tokens(ctx: Context, msg: JettonBurn) {
+    virtual inline fun burnTokens(ctx: Context, msg: JettonBurn) {
         send(SendParameters{
-                to: self.jetton_master,
-                value: 0,
-                mode: SendRemainingValue,
-                bounce: true,
-                body: JettonBurnNotification{
-                    query_id: msg.query_id,
-                    amount: msg.amount,
-                    sender: self.owner,
-                    response_destination: msg.response_destination
-                }.toCell()
-            }
+            to: self.jettonMaster,
+            value: 0,
+            mode: SendRemainingValue,
+            bounce: true,
+            body: JettonBurnNotification{
+                queryId: msg.queryId,
+                amount: msg.amount,
+                sender: self.owner,
+                responseDestination: msg.responseDestination
+            }.toCell()
+        }
         );
     }
 
-    virtual inline fun _internal_transfer_validate(ctx: Context, msg: JettonInternalTransfer) {
-        if (ctx.sender != self.jetton_master) {
-            let init: StateInit = self.calculate_jetton_wallet_init(msg.from);
+    virtual inline fun internalTransferValidate(ctx: Context, msg: JettonInternalTransfer) {
+        if (ctx.sender != self.jettonMaster) {
+            let init: StateInit = self.calculateJettonWalletInit(msg.from);
             require(ctx.sender == contractAddress(init),
-                "JettonWallet: Only Jetton master or Jetton wallet can call this function"
+            "JettonWallet: Only Jetton master or Jetton wallet can call this function"
             );
         }
     }
 
-    virtual inline fun _internal_transfer_estimate_remain_value(ctx: Context, msg: JettonInternalTransfer): Int {
+    virtual inline fun internalTransferEstimateRemainValue(ctx: Context, msg: JettonInternalTransfer): Int {
         let tonBalanceBeforeMsg: Int = (myBalance() - ctx.value);
-        let storage_fee: Int = (self.minTonsForStorage - min(tonBalanceBeforeMsg, self.minTonsForStorage));
-        let remain: Int = (ctx.value - (storage_fee + self.gasConsumption));
-        if (msg.forward_ton_amount > 0) {
-            remain = (remain - (ctx.readForwardFee() + msg.forward_ton_amount));
+        let storageFee: Int = (self.minTonsForStorage - min(tonBalanceBeforeMsg, self.minTonsForStorage));
+        let remain: Int = (ctx.value - (storageFee + self.gasConsumption));
+        if (msg.forwardTonAmount > 0) {
+            remain = (remain - (ctx.readForwardFee() + msg.forwardTonAmount));
         }
         return remain;
     }
 
-    virtual inline fun _internal_transfer_notification(ctx: Context, msg: JettonInternalTransfer) {
-        if (msg.forward_ton_amount > 0) {
+    virtual inline fun internalTransferNotification(ctx: Context, msg: JettonInternalTransfer) {
+        if (msg.forwardTonAmount > 0) {
             send(SendParameters{
-                    to: self.owner,
-                    value: msg.forward_ton_amount,
-                    mode: SendPayGasSeparately,
-                    bounce: false,
-                    body: JettonTransferNotification{
-                        query_id: msg.query_id,
-                        amount: msg.amount,
-                        sender: msg.from,
-                        forward_payload: msg.forward_payload
-                    }.toCell()
-                }
+                to: self.owner,
+                value: msg.forwardTonAmount,
+                mode: SendPayGasSeparately,
+                bounce: false,
+                body: JettonTransferNotification{
+                    queryId: msg.queryId,
+                    amount: msg.amount,
+                    sender: msg.from,
+                    forwardPayload: msg.forwardPayload
+                }.toCell()
+            }
             );
         }
     }
 
-    virtual inline fun _internal_transfer_excesses(ctx: Context, msg: JettonInternalTransfer, remain: Int) {
-        if (msg.response_address != null && remain > 0) {
+    virtual inline fun internalTransferExcesses(ctx: Context, msg: JettonInternalTransfer, remain: Int) {
+        if (msg.responseAddress != null && remain > 0) {
             send(SendParameters{
-                    to: msg.response_address!!,
-                    value: remain,
-                    bounce: false,
-                    mode: SendIgnoreErrors,
-                    body: JettonExcesses{query_id: msg.query_id}.toCell()
-                }
+                to: msg.responseAddress!!,
+                value: remain,
+                bounce: false,
+                mode: SendIgnoreErrors,
+                body: JettonExcesses{queryId: msg.queryId}.toCell()
+            }
             );
         }
     }
 
-    get fun get_wallet_data(): WalletData {
+    get fun getWalletData(): WalletData {
         return
-            WalletData{
-                balance: self.balance,
-                owner: self.owner,
-                jetton: self.jetton_master,
-                jetton_wallet_code: self.calculate_jetton_wallet_init(self.owner).code
-            };
+        WalletData{
+            balance: self.balance,
+            owner: self.owner,
+            jetton: self.jettonMaster,
+            jettonWalletCode: self.calculateJettonWalletInit(self.owner).code
+        };
     }
 }
