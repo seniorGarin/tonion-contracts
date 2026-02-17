@@ -52,7 +52,7 @@ struct WalletData {
 // ============================================================ //
 
 trait JettonWallet {
-    balance: Int;
+    balance: Int as coins;
     owner: Address;
     jettonMaster: Address;
     virtual const gasConsumption: Int = ton("0.01");
@@ -69,7 +69,6 @@ trait JettonWallet {
 
     receive(msg: JettonBurn) {
         let ctx: Context = context();
-        self.balance = (self.balance - msg.amount);
         require(self.balance >= 0, "JettonWallet: Not enough balance to burn tokens");
         self.burnValidate(ctx, msg);
         self.burnTokens(ctx, msg);
@@ -116,10 +115,9 @@ trait JettonWallet {
     }
 
     virtual inline fun transferJetton(ctx: Context, msg: JettonTransfer) {
-        let init: StateInit = self.calculateJettonWalletInit(msg.destination);
-        let receiver: Address = contractAddress(init);
+        let initCode: StateInit = self.calculateJettonWalletInit(msg.destination);
         send(SendParameters{
-            to: receiver,
+            to: contractAddress(initCode),
             value: 0,
             bounce: true,
             mode: SendRemainingValue,
@@ -131,13 +129,14 @@ trait JettonWallet {
                 forwardTonAmount: msg.forwardTonAmount,
                 forwardPayload: msg.forwardPayload
             }.toCell(),
-            code: init.code,
-            data: init.data
+            code: initCode.code,
+            data: initCode.data
         }
         );
     }
 
     virtual inline fun burnTokens(ctx: Context, msg: JettonBurn) {
+        self.balance = (self.balance - msg.amount);
         send(SendParameters{
             to: self.jettonMaster,
             value: 0,
@@ -203,6 +202,7 @@ trait JettonWallet {
         }
     }
 
+    // ====== Get Methods ====== //
     get fun walletData(): WalletData {
         return
         WalletData{

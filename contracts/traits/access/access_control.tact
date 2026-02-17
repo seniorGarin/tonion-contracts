@@ -39,8 +39,7 @@ trait AccessControl {
     const ADMIN_ROLE: Int = sha256("ADMIN_ROLE");
 
     fun initRole(role: Int): Bool {
-        let a: RoleData? = self.roles.get(role);
-        if (a == null) {
+        if (self.roles.get(role) == null) {
             self.roles.set(role, RoleData{
                 hasRole: emptyMap(),
                 adminRole: self.ADMIN_ROLE
@@ -59,8 +58,12 @@ trait AccessControl {
     fun grantRole(role: Int, account: Address) {
         if (!self.hasRole(role, account)) {
             let currentRole: RoleData = self.roles.get(role)!!;
-            currentRole.hasRole.set(account, true);
-            self.roles.set(role, currentRole);
+            let updatedMap: map<Address, Bool> = currentRole.hasRole;
+            updatedMap.set(account, true);
+            self.roles.set(role, RoleData{
+                hasRole: updatedMap,
+                adminRole: currentRole.adminRole
+            });
             emit(GrantRoleEvent{role: role, account: account}.toCell());
         }
     }
@@ -68,8 +71,12 @@ trait AccessControl {
     fun revokeRole(role: Int, account: Address) {
         if (self.hasRole(role, account)) {
             let currentRole: RoleData = self.roles.get(role)!!;
-            currentRole.hasRole.set(account, false);
-            self.roles.set(role, currentRole);
+            let updatedMap: map<Address, Bool> = currentRole.hasRole;
+            updatedMap.set(account, false);
+            self.roles.set(role, RoleData{
+                hasRole: updatedMap,
+                adminRole: currentRole.adminRole
+            });
             emit(RevokeRoleEvent{role: role, account: account}.toCell());
         }
     }
@@ -83,8 +90,9 @@ trait AccessControl {
     }
 
     virtual fun renounceRole(role: Int, account: Address) {
-        nativeThrowUnless(777, account == context().sender);
+        nativeThrowUnless(777, account == sender());
         self.revokeRole(role, account);
+        emit(RenounceRoleEvent{role: role, account: account}.toCell());
     }
 
     virtual fun revokeRoleExternal(role: Int, account: Address) {
@@ -99,23 +107,14 @@ trait AccessControl {
 
     get fun hasRole(role: Int, account: Address): Bool {
         let r: RoleData? = self.roles.get(role);
-        if (r == null) {
-            return false;
-        }
-
-        let a: Bool? = r!!.hasRole.get(account);
-
-        if (a == null || a == false) {
-            return false;
-        }
-        return true;
+        if (r == null) { return false; }
+        let hasAccount: Bool? = r!!.hasRole.get(account);
+        return hasAccount == true; // null или false вернут false
     }
 
     get fun adminRole(role: Int): Int {
         let r: RoleData? = self.roles.get(role);
-        if (r == null) {
-            nativeThrow(666);
-        }
+        if (r == null) { nativeThrow(666); }
         return r!!.adminRole;
     }
 

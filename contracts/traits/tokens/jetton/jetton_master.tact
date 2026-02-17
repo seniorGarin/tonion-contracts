@@ -84,8 +84,7 @@ trait JettonMaster {
         }
     }
 
-// ====== Get Methods ====== //
-
+    // ====== Get Methods ====== //
     get fun jettonData(): JettonData {
         return
         JettonData{
